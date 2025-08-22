@@ -44,7 +44,7 @@ prompt = ChatPromptTemplate.from_messages([
 parser = StrOutputParser()
 
 #tool
-search_tool = TavilySearch(max_results=3, tavily_api_key="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")
+search_tool = TavilySearch(max_results=3, tavily_api_key="")
 tools = [search_tool]
 
 agent = create_react_agent(llm=llm, tools=tools, prompt=prompt)
