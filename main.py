@@ -1,61 +1,53 @@
 from langchain_ollama import ChatOllama
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.output_parsers import StrOutputParser
 from langchain_tavily import TavilySearch
-from langchain.agents import create_react_agent, AgentExecutor
+from langchain.agents import AgentExecutor, create_tool_calling_agent
+from callback.loggingCallbackHandler import LoggingCallbackHandler
+from tools.time import get_current_time_by_country
+from tools.fileSystem import find_files_in_directory, read_file, write_file
 from util.util import pretty_event_print
 from command.command import CommandManager
 
 # model select
-llm = ChatOllama(model="llama3.1:8b-instruct-q4_K_M", temperature=0.2)
+llm = ChatOllama(model="gpt-oss:20b", temperature=0.2)
+
+#tool calling prompt
 prompt = ChatPromptTemplate.from_messages([
     ("system", """
-        You have access to the following tools:
-        {tools}
-        DO NOT translate or change these markers or tool names:
-        - Thought:
-        - Action:
-        - Action Input:
-        - Observation:
-        - Final Answer:
+                You are a helpful AI assistant that can use tools to answer questions. Answer in {language}.
 
-        Rules:
-        1. If the input is trivial (e.g. greeting, small talk, obvious knowledge), 
-        DO NOT use any Action. Go directly to:
-        Final Answer: <your answer in {language}>
-
-        2. If you can answer the input without using any tool, 
-        DO NOT use any Action. Go directly to:
-        Final Answer: <your answer in {language}>
-
-        3. Only if the input cannot be answered without a tool, 
-        then follow the standard ReAct format:
-        Thought:
-        Action: <tool name from {tool_names}>
-        Action Input: "<plain text input>"
-        Observation: <result>
-        (repeat as needed)
-
-        4. You must ALWAYS end with exactly one:
-        Final Answer: <your answer in {language}>
+                Guidelines:
+                1. For simple questions you can answer with your knowledge, respond directly in natural language without using tools.
+                2. If a tool is needed, respond with the correct function call in JSON format as defined by the system (do not mix text and JSON).
+                3. After receiving a tool result, always give the final answer in natural language, not JSON.
+                4. Be efficient – avoid calling the same tool multiple times with identical parameters.
+                5. When using tavily_search or search_web tool:
+                   - FIRST, you must call get_current_time_by_country tool to know today's date
+                   - Use this current date information to make your search query more specific and relevant
+                   - NEVER use time_range variable when calling tool
+                   - You must not call it more than once per question
+                   - Always request up to 5 results in a single call and make the answer from those results.
     """),
-    ("human", "{input}\n{agent_scratchpad}")
+    ("placeholder", "{agent_scratchpad}"),
+    ("human", "{input}")
 ])
-parser = StrOutputParser()
 
 #tool
-search_tool = TavilySearch(max_results=3, tavily_api_key="")
-tools = [search_tool]
+search_tool = TavilySearch(max_results=5, tavily_api_key="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")
+tools = [ search_tool, get_current_time_by_country, find_files_in_directory, read_file, write_file ]
 
-agent = create_react_agent(llm=llm, tools=tools, prompt=prompt)
-agent_exec = AgentExecutor(agent=agent, tools=tools, verbose=False, handle_parsing_errors=True)
+#callback
+logging_callback = LoggingCallbackHandler()
+callbacks = [ logging_callback ]
 
-#프롬프트 체인
-chain = prompt | llm | parser
+agent = create_tool_calling_agent(llm=llm, tools=tools, prompt=prompt)
+agent_exec = AgentExecutor(agent=agent, tools=tools, verbose=False, handle_parsing_errors=True, callbacks=callbacks)
 
 #language
 prompt_language = "Korean"
 print(f"[Language :: {prompt_language}]\n{'-' * 60}\n")
+
+show_think = True
 
 while True:
     user_input = input("Question :: ")
@@ -74,6 +66,21 @@ while True:
         print(f"prompt language :: {prompt_language}")
         continue
 
-    for event in agent_exec.stream({"input": user_input, "language": prompt_language}):
-        pretty_event_print(event)
+    if user_input.lower().startswith('/think'):
+        if len(user_input.split(" ")) == 2:
+            value = user_input.split(" ")[1]
+            if value in ("True", "False"):
+                show_think = True if value == "True" else False if value == "False" else show_think
+            else:
+                print("You should enter True or False")
+        print(f"current mode :: show think > {show_think}")
+        continue
+    
+    if show_think:
+        for event in agent_exec.stream({"input": user_input, "language": prompt_language}):
+            pretty_event_print(event)
+    else:
+        response = agent_exec.invoke({"input": user_input, "language": prompt_language})
+        print(f"answer > {response['output']}")
+    
     print()
