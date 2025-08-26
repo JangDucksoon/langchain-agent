@@ -64,3 +64,28 @@ def write_file(file_path, contents, mode) -> str:
         return f"Successfully wrote to {file_path}"
     except Exception as e:
         return f"An error occurred while writing to the file: {e}"
+
+@tool
+def delete_file(file_path) -> str:
+    """
+        Description:
+            Delete {file_path} and Return result message
+
+        Code logic steps:
+            1. Check the file exist by {file_path}
+            2. Start to delete {file_path}
+            3. Return result message
+            4. If There is no {file_path}, Then Return message about it
+
+        Args:
+            file_path (str) : The path of file to delete
+
+        Returns:
+            str: Successfully delete message or Doesn't exist file message
+    """
+
+    if os.path.exists(file_path):
+        os.remove(file_path)
+        return f"Successfully delete {file_path}"
+    else:
+        return f"There is no {file_path}"
