@@ -5,6 +5,8 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_tavily import TavilySearch
 from langchain.agents import AgentExecutor, create_tool_calling_agent
 from langchain_core.chat_history import InMemoryChatMessageHistory
+from sqlalchemy.ext.asyncio import create_async_engine
+from langchain_community.chat_message_histories import SQLChatMessageHistory
 from langchain_core.runnables.history import RunnableWithMessageHistory
 from mcp_server.mcpManager import McpManager
 from callback.loggingCallbackHandler import LoggingCallbackHandler
@@ -75,11 +77,20 @@ logging_callback = LoggingCallbackHandler()
 callbacks = [ logging_callback ]
 
 #memory for chat history
-store = {}
+store = {} #History Cache
 def get_session_history(session_id: str):
     if session_id not in store:
         store[session_id] = InMemoryChatMessageHistory()
     return store[session_id]
+
+#sqllist for chat history
+engine = create_async_engine("sqlite+aiosqlite:///chat_history.db") #async io for db
+def get_session_history_db(session_id:str):
+    return SQLChatMessageHistory(
+        session_id = session_id,
+        connection = engine
+    )
+history_mode = "M" # M: memory -> get_session_history, D: database -> get_session_history_db
 
 #agent
 agent = create_tool_calling_agent(llm=llm, tools=tools, prompt=prompt)
@@ -87,26 +98,28 @@ agent_exec = AgentExecutor(agent=agent, tools=tools, callbacks=callbacks, verbos
 
 agent_with_history = RunnableWithMessageHistory(
     runnable=agent_exec,
-    get_session_history=get_session_history,
+    get_session_history=get_session_history_db,
     input_messages_key="input",
     history_messages_key="chat_history",
 )
 
 #language
 prompt_language = "Korean"
-print(f"[Language :: {prompt_language}]\n{'-' * 60}\n")
+print(f"[Language :: {prompt_language}]\n{'-' * 60}")
 
 #custom properties
 show_think = True
 SESSION_ID = str(uuid.uuid4())
-print(f"[SESSION_ID :: {SESSION_ID}]\n{'-' * 60}\n")
+print(f"[SESSION_ID :: {SESSION_ID}]\n{'-' * 60}")
+
+print(f"[History mode :: {"Database" if history_mode == "D" else "Memory"}]\n{'-' * 60}\n")
 
 async def main():
-    global show_think, prompt_language
+    global show_think, prompt_language, history_mode
     while True:
         user_input = input("Question :: ")
 
-
+        ############## Command Area #######################
         if user_input.lower() in ["/exit", "exit"]:
             break
 
@@ -116,6 +129,24 @@ async def main():
 
         if user_input.lower() in ["/history", "history"]:
             CommandManager.show_history(SESSION_ID, store)
+            continue
+
+        if user_input.lower() in ["/change-history-mode", "change history mode"]:
+            history_mode = "D" if history_mode == "M" else "M"
+
+            if history_mode == "D":
+                agent_with_history.get_session_history = get_session_history_db
+                user_name = input("set your name > ")
+                if not user_name:
+                    history_mode = "M"
+                    agent_with_history.get_session_history = get_session_history
+                    print("If you don't set your name, can not use database for chat history store")
+                else:
+                    print(f"Hellow {user_name} !!")
+            else:
+                agent_with_history.get_session_history = get_session_history
+
+            print(f"Current history mode > {"Database" if history_mode == "D" else "Memory"}")
             continue
 
         if user_input.lower() in ["/reset", "reset"]:
@@ -153,11 +184,12 @@ async def main():
         if user_input.strip() == "":
             continue
 
+        ############## Command Area #######################
         if show_think:
-            async for event in agent_with_history.astream({"input": user_input, "language": prompt_language}, config={"configurable": {"session_id": SESSION_ID}}):
+            async for event in agent_with_history.astream({"input": user_input, "language": prompt_language}, config={"configurable": {"session_id": SESSION_ID if history_mode == "M" else user_name}}):
                 pretty_event_print(event)
         else:
-            response = await agent_with_history.ainvoke({"input": user_input, "language": prompt_language}, config={"configurable": {"session_id": SESSION_ID}})
+            response = await agent_with_history.ainvoke({"input": user_input, "language": prompt_language}, config={"configurable": {"session_id": SESSION_ID if history_mode == "M" else user_name}})
             print(f"answer > {response['output']}")
 
         print()

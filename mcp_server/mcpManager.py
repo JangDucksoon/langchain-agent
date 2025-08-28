@@ -37,7 +37,7 @@ class McpManager:
 
             self.mcp_server_list = list(config["mcpServers"].keys())
             print(f"MCP Server list : {self.mcp_server_list}")
-            print(f"MCP initialized ! : {[tool.name for tool in self.tools]}")
+            print(f"MCP initialized ! : {[tool.name for tool in self.tools]}\n")
             return True
         except Exception as e:
             print(f"MCP initialize Error : {e}")
