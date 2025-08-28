@@ -1,13 +1,16 @@
 import uuid
+import asyncio
 from langchain_ollama import ChatOllama
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_tavily import TavilySearch
 from langchain.agents import AgentExecutor, create_tool_calling_agent
 from langchain_core.chat_history import InMemoryChatMessageHistory
 from langchain_core.runnables.history import RunnableWithMessageHistory
+from mcp_server.mcpManager import McpManager
 from callback.loggingCallbackHandler import LoggingCallbackHandler
 from tools.time import get_current_time_by_country
 from tools.fileSystem import find_files_in_directory, read_file, write_file, delete_file
+from tools.codeExecuter import execute_python_code, execute_python_docker
 from util.util import pretty_event_print
 from command.command import CommandManager
 
@@ -48,11 +51,11 @@ prompt = ChatPromptTemplate.from_messages([
                     Case1) tavily_search(query='Apple') → tavily_search(query='Apple') (exact duplicate)
                     ***
                 6. When using tavily_search or search_web tool:
-                   - FIRST, you must call get_current_time_by_country tool to know today's date
-                   - Use this current date information to make your search query more specific and relevant
-                   - NEVER use time_range variable when calling tool
-                   - You must not call it more than once per question
-                   - Always request up to 5 results in a single call and make the answer from those results.
+                    - FIRST, you must call get_current_time_by_country tool to know today's date
+                    - Use this current date information to make your search query more specific and relevant
+                    - NEVER use time_range variable when calling tool
+                    - You must not call it more than once per question
+                    - Always request up to 5 results in a single call and make the answer from those results.
     """),
     ("placeholder", "{chat_history}"),
     ("human", "{input}"),
@@ -61,7 +64,11 @@ prompt = ChatPromptTemplate.from_messages([
 
 #tool
 search_tool = TavilySearch(max_results=5, tavily_api_key="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")
-tools = [ search_tool, get_current_time_by_country, find_files_in_directory, read_file, write_file, delete_file ]
+tools = [ search_tool, get_current_time_by_country, find_files_in_directory, read_file, write_file, delete_file, execute_python_code, execute_python_docker ]
+
+#mcp servers
+mcp_servers = McpManager("mcp_config.json")
+tools.extend(mcp_servers.get_tools())
 
 #callback
 logging_callback = LoggingCallbackHandler()
@@ -94,48 +101,66 @@ show_think = True
 SESSION_ID = str(uuid.uuid4())
 print(f"[SESSION_ID :: {SESSION_ID}]\n{'-' * 60}\n")
 
-while True:
-    user_input = input("Question :: ")
+async def main():
+    global show_think, prompt_language
+    while True:
+        user_input = input("Question :: ")
 
 
-    if user_input.lower() in ["/exit", "exit"]:
-        break
+        if user_input.lower() in ["/exit", "exit"]:
+            break
 
-    if user_input.lower() in ["/clear", "clear"]:
-        CommandManager.clear_console()
-        continue
+        if user_input.lower() in ["/clear", "clear"]:
+            CommandManager.clear_console()
+            continue
 
-    if user_input.lower() in ["/history", "history"]:
-        CommandManager.show_history(SESSION_ID, store)
-        continue
+        if user_input.lower() in ["/history", "history"]:
+            CommandManager.show_history(SESSION_ID, store)
+            continue
 
-    if user_input.lower() in ["/reset", "reset"]:
-        if SESSION_ID in store:
-            store[SESSION_ID].clear()
-        print("----------------------------Memory reset--------------------")
-        continue
+        if user_input.lower() in ["/reset", "reset"]:
+            if SESSION_ID in store:
+                store[SESSION_ID].clear()
+            print("----------------------------Memory reset--------------------")
+            continue
 
-    if user_input.lower().startswith("/lang"):
-        if len(user_input.split(" ")) == 2:
-            prompt_language = user_input.split(" ")[1]
-        print(f"prompt language :: {prompt_language}")
-        continue
+        if user_input.lower().startswith("/lang"):
+            if len(user_input.split(" ")) == 2:
+                prompt_language = user_input.split(" ")[1]
+            print(f"prompt language :: {prompt_language}")
+            continue
 
-    if user_input.lower().startswith('/think'):
-        if len(user_input.split(" ")) == 2:
-            value = user_input.split(" ")[1]
-            if value in ("True", "False"):
-                show_think = True if value == "True" else False if value == "False" else show_think
-            else:
-                print("You should enter True or False")
-        print(f"current mode :: show think > {show_think}")
-        continue
+        if user_input.lower().startswith("/think"):
+            if len(user_input.split(" ")) == 2:
+                value = user_input.split(" ")[1]
+                if value in ("True", "False"):
+                    show_think = True if value == "True" else False if value == "False" else show_think
+                else:
+                    print("You should enter True or False")
+            print(f"current mode :: show think > {show_think}")
+            continue
 
-    if show_think:
-        for event in agent_with_history.stream({"input": user_input, "language": prompt_language}, config={"configurable": {"session_id": SESSION_ID}}):
-            pretty_event_print(event)
-    else:
-        response = agent_with_history.invoke({"input": user_input, "language": prompt_language}, config={"configurable": {"session_id": SESSION_ID}})
-        print(f"answer > {response['output']}")
+        if user_input.lower().startswith("/tools"):
+            print("[tools]")
+            print([tool.name for tool in tools])
+            continue
 
-    print()
+        if user_input.lower().startswith("/mcps"):
+            print("[mcps]")
+            print(mcp_servers.get_mcp_server_list())
+            continue
+
+        if user_input.strip() == "":
+            continue
+
+        if show_think:
+            async for event in agent_with_history.astream({"input": user_input, "language": prompt_language}, config={"configurable": {"session_id": SESSION_ID}}):
+                pretty_event_print(event)
+        else:
+            response = await agent_with_history.ainvoke({"input": user_input, "language": prompt_language}, config={"configurable": {"session_id": SESSION_ID}})
+            print(f"answer > {response['output']}")
+
+        print()
+
+if __name__ == "__main__":
+    asyncio.run(main())

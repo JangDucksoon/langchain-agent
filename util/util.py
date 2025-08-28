@@ -6,8 +6,8 @@ def pretty_event_print(ev):
     content = ""
     if "steps" in ev:
         for s in ev["steps"]:
-            print("[STEP LOG]\n" + str(s.action.log))
-            content = "[STEP LOG]\n" + str(s.action.log) + "\n"
+            print("[STEP LOG] " + str(s.action.log))
+            content = "[STEP LOG] " + str(s.action.log) + "\n"
 
             if getattr(s, "observation", None) is not None:
                 print("[OBSERVATION]\n" + str(s.observation))

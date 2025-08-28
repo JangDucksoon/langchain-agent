@@ -68,8 +68,7 @@ def write_file(file_path, contents, mode) -> str:
 @tool
 def delete_file(file_path) -> str:
     """
-        Description:
-            Delete {file_path} and Return result message
+        Delete {file_path} and Return result message
 
         Code logic steps:
             1. Check the file exist by {file_path}

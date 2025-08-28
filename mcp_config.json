@@ -1,0 +1,12 @@
+{
+    "mcpServers": {
+        "postgres_k8s": {
+            "command": "postgres-mcp",
+            "args": ["--access-mode=unrestricted"],
+            "env": {
+                "DATABASE_URI": "postgresql://postgres:postgresql@192.168.30.100:30432/postgres"
+            },
+            "transport": "stdio"
+        }
+    }
+}
