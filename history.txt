@@ -2953,3 +2953,75 @@ Invoking: `execute_sql` with `{'sql': 'SELECT post_id, content FROM post_comment
 [OBSERVATION]
 [{'post_id': '036f', 'content': 'Great post!'}, {'post_id': '0a33', 'content': 'Very insightful.'}, {'post_id': '0c0e', 'content': 'I love this topic.'}, {'post_id': '0db0', 'content': 'Thanks for sharing.'}, {'post_id': '0fe8', 'content': 'This was very helpful.'}, {'post_id': '1086', 'content': 'Excellent write-up.'}, {'post_id': '124d', 'content': 'I learned a lot.'}, {'post_id': '1250', 'content': 'Interesting perspective.'}, {'post_id': '12fa', 'content': 'Well explained.'}, {'post_id': '140c', 'content': 'Nice article.'}, {'post_id': '161e', 'content': 'Very informative.'}, {'post_id': '165d', 'content': 'Great insights.'}, {'post_id': '176c', 'content': 'Helpful content.'}, {'post_id': '19f0', 'content': 'Good job.'}, {'post_id': '1b0e', 'content': 'Nice read.'}, {'post_id': '1b99', 'content': 'Thought-provoking.'}, {'post_id': '1cec', 'content': 'Excellent points.'}, {'post_id': '1d82', 'content': 'Very useful.'}, {'post_id': '1dbe', 'content': 'Nice discussion.'}, {'post_id': '21d1', 'content': 'Great post!'}]
 
+Answer > `post_comment` 테이블의 20개 레코드에 대해 `content` 컬럼을 모두 영문으로 다양하게 바꾸었습니다.  
+
+아래는 현재 각 `post_id`와 새로 업데이트된 `content` 값입니다:
+
+| post_id | content |
+|---------|---------|
+| 036f | Great post! |
+| 0a33 | Very insightful. |
+| 0c0e | I love this topic. |
+| 0db0 | Thanks for sharing. |
+| 0fe8 | This was very helpful. |
+| 1086 | Excellent write-up. |
+| 124d | I learned a lot. |
+| 1250 | Interesting perspective. |
+| 12fa | Well explained. |
+| 140c | Nice article. |
+| 161e | Very informative. |
+| 165d | Great insights. |
+| 176c | Helpful content. |
+| 19f0 | Good job. |
+| 1b0e | Nice read. |
+| 1b99 | Thought-provoking. |
+| 1cec | Excellent points. |
+| 1d82 | Very useful. |
+| 1dbe | Nice discussion. |
+| 21d1 | Great post! |
+
+필요한 추가 작업이 있으면 알려 주세요!
+==========================================================================================
+
+
+==========================================================================================
+[2025-08-28 12:59:02] Question :: 그럼 이제 post 테이블과 comment 테이블을 조인해서 조회하는 쿼리를 줘 
+Answer > 아래는 **`post`** 테이블과 **`post_comment`** 테이블을 조인해서, 각 포스트와 그에 달린 댓글을 함께 조회하는 예시 쿼리입니다.  
+
+```sql
+SELECT
+    p.id          AS post_id,
+    p.title       AS post_title,
+    p.content     AS post_content,
+    p.created_at  AS post_created_at,
+
+    c.id          AS comment_id,
+    c.content     AS comment_content,
+    c.created_at  AS comment_created_at
+FROM
+    post p
+LEFT JOIN
+    post_comment c
+    ON c.post_id = p.id
+ORDER BY
+    p.id,
+    c.created_at;
+```
+
+### 쿼리 설명
+- **LEFT JOIN** 을 사용해 `post` 에 존재하는 모든 레코드를 가져오고, 해당 포스트에 댓글이 없더라도 포스트 정보는 그대로 표시됩니다.  
+- `p.id` 를 기준으로 정렬하면 같은 포스트에 속한 댓글이 시간순으로 정렬됩니다.  
+- 필요에 따라 `WHERE` 절을 추가해 특정 포스트나 날짜 범위, 특정 키워드가 포함된 댓글만 필터링할 수 있습니다.  
+
+예시:  
+```sql
+-- 특정 포스트 ID(예: 1)만 조회
+SELECT * FROM post p
+LEFT JOIN post_comment c ON c.post_id = p.id
+WHERE p.id = 1;
+```
+
+필요한 추가 조건이 있으면 알려 주세요!
+==========================================================================================
+
+
