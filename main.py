@@ -15,6 +15,9 @@ from tools.fileSystem import find_files_in_directory, read_file, write_file, del
 from tools.codeExecuter import execute_python_code, execute_python_docker
 from util.util import pretty_event_print
 from command.command import CommandManager
+from checking_ollama import check_ollama_serving
+
+check_ollama_serving()
 
 # model select
 llm = ChatOllama(model="gpt-oss:20b", temperature=0.2)
@@ -98,7 +101,7 @@ agent_exec = AgentExecutor(agent=agent, tools=tools, callbacks=callbacks, verbos
 
 agent_with_history = RunnableWithMessageHistory(
     runnable=agent_exec,
-    get_session_history=get_session_history_db,
+    get_session_history=get_session_history,
     input_messages_key="input",
     history_messages_key="chat_history",
 )
@@ -117,6 +120,7 @@ print(f"[History mode :: {"Database" if history_mode == "D" else "Memory"}]\n{'-
 async def main():
     global show_think, prompt_language, history_mode
     while True:
+        print(f"{'===' * 30}")
         user_input = input("Question :: ")
 
         ############## Command Area #######################
@@ -128,7 +132,11 @@ async def main():
             continue
 
         if user_input.lower() in ["/history", "history"]:
-            CommandManager.show_history(SESSION_ID, store)
+            history_object = {"session_id": SESSION_ID, "store": store} if history_mode == "M" else {"sql_history": get_session_history_db(user_name)}
+            await CommandManager.show_history(
+                history_mode=history_mode,
+                history_object=history_object
+            )
             continue
 
         if user_input.lower() in ["/change-history-mode", "change history mode"]:
@@ -150,9 +158,16 @@ async def main():
             continue
 
         if user_input.lower() in ["/reset", "reset"]:
-            if SESSION_ID in store:
-                store[SESSION_ID].clear()
-            print("----------------------------Memory reset--------------------")
+            if history_mode == "M":
+                if SESSION_ID in store:
+                    store[SESSION_ID].clear()
+                print("----------------------------Memory reset--------------------")
+            elif history_mode == "D":
+                if user_name:
+                    await get_session_history_db(user_name).aclear()
+                else:
+                    print(f"--------------------{user_name}'s history reset in DB----------------------")
+                    print("----------------------------history reset in DB--------------------")
             continue
 
         if user_input.lower().startswith("/lang"):
@@ -181,6 +196,12 @@ async def main():
             print(mcp_servers.get_mcp_server_list())
             continue
 
+        if user_input.lower() in ["/info", "info"]:
+            print(f"\n[Language :: {prompt_language}]\n{'-' * 60}")
+            print(f"[SESSION_ID :: {SESSION_ID}]\n{'-' * 60}")
+            print(f"[History mode :: {"Database" if history_mode == "D" else "Memory"}]\n{'-' * 60}\n")
+            continue
+
         if user_input.strip() == "":
             continue
 
@@ -192,7 +213,7 @@ async def main():
             response = await agent_with_history.ainvoke({"input": user_input, "language": prompt_language}, config={"configurable": {"session_id": SESSION_ID if history_mode == "M" else user_name}})
             print(f"answer > {response['output']}")
 
-        print()
+        print(f"{'===' * 30}\n")
 
 if __name__ == "__main__":
     asyncio.run(main())
