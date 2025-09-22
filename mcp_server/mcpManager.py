@@ -1,4 +1,5 @@
 import os
+import sys
 import json
 import asyncio
 from langchain_mcp_adapters.client import MultiServerMCPClient
@@ -16,7 +17,9 @@ class McpManager:
         self.tools = []
         self.is_initialized = False
 
-        asyncio.run(self.__initialize())
+        filename = os.path.basename(sys.argv[0])
+        if filename == "main.py":
+            asyncio.run(self.__initialize())
 
     def __load_config(self):
         try:
@@ -74,7 +77,7 @@ class McpManager:
         #비동기 호출
         async def _async(**kwargs: Any):
             return await original.ainvoke(kwargs)
-        
+
         return StructuredTool.from_function(
             name=new_name,
             description=new_description,

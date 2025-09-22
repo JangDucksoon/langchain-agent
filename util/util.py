@@ -22,3 +22,28 @@ def pretty_event_print(ev):
             content += f"Answer > {m.content.split("Final Answer: ")[-1]}\n{'===' * 30}\n"
 
     logging_history(f"{content}\n\n")
+
+def pretty_event_print_api(ev):
+    content = ""
+    if "steps" in ev:
+        for s in ev["steps"]:
+            message = "[STEP LOG] " + str(s.action.log)
+            yield message
+            content = "[STEP LOG] " + str(s.action.log) + "\n"
+
+            if getattr(s, "observation", None) is not None:
+                message = "[OBSERVATION]\n" + str(s.observation)
+                yield message
+                content += "[OBSERVATION]\n" + str(s.observation)
+    elif "actions" in ev:
+        for a in ev["actions"]:
+            message = f"\n[ACTION] tool={a.tool}\n[ACTION INPUT] {a.tool_input}"
+            yield message
+            content += f"\n[ACTION] tool={a.tool}\n[ACTION INPUT] {a.tool_input}"
+    elif "messages" in ev:
+        for m in ev["messages"]:
+            message = f"\n{m.content.split("Final Answer: ")[-1]}"
+            yield message
+            content += f"Answer > {m.content.split("Final Answer: ")[-1]}\n{'===' * 30}\n"
+
+    logging_history(f"{content}\n\n")
