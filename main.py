@@ -6,14 +6,15 @@ from langchain_tavily import TavilySearch
 from langchain.agents import AgentExecutor, create_tool_calling_agent
 from langchain_core.chat_history import InMemoryChatMessageHistory
 from sqlalchemy.ext.asyncio import create_async_engine
-from langchain_community.chat_message_histories import SQLChatMessageHistory
 from langchain_core.runnables.history import RunnableWithMessageHistory
+from langchain_community.chat_message_histories import SQLChatMessageHistory
 from mcp_server.mcpManager import McpManager
 from callback.loggingCallbackHandler import LoggingCallbackHandler
 from tools.time import get_current_time_by_country
 from tools.fileSystem import find_files_in_directory, read_file, write_file, delete_file
 from tools.codeExecuter import execute_python_code, execute_python_docker
 from util.util import pretty_event_print
+from util.history_message_converter import HistoryMessageConverter
 from command.command import CommandManager
 from checking_ollama import check_ollama_serving
 
@@ -40,7 +41,11 @@ prompt = ChatPromptTemplate.from_messages([
                         Action Input: {{'timezone': 'Europe/Moscow'}}
                         Observation: 2025-08-26 08:46:36"
                     Then DO NOT call get_current_time_by_country with timezone='Europe/Moscow' again!
-                5. Never call any tools more than once with same request (if there are different values of variables, you can call more)
+                5. If a user sends a request related to the MCP server, consider using the MCP server tool first rather than the python code execution tool.
+                   ***
+                    Example: Insert data into Test table, please -> Use Execute DB tools, not execute_python_docker, execute_python_code
+                   ***
+                6. Never call any tools more than once with same request (if there are different values of variables, you can call more)
                     STEP-BY-STEP CHECK before each tool call:
                     Step 1: Look at your action history above
                     Step 2: Check if you already called this exact tool with these exact parameters
@@ -55,12 +60,13 @@ prompt = ChatPromptTemplate.from_messages([
                     Example of BAD tool usage:
                     Case1) tavily_search(query='Apple') → tavily_search(query='Apple') (exact duplicate)
                     ***
-                6. When using tavily_search or search_web tool:
+                7. When using tavily_search or search_web tool:
                     - FIRST, you must call get_current_time_by_country tool to know today's date
                     - Use this current date information to make your search query more specific and relevant
                     - NEVER use time_range variable when calling tool
                     - You must not call it more than once per question
                     - Always request up to 5 results in a single call and make the answer from those results.
+                8. When user request
     """),
     ("placeholder", "{chat_history}"),
     ("human", "{input}"),
@@ -89,9 +95,11 @@ def get_session_history(session_id: str):
 #sqllist for chat history
 engine = create_async_engine("sqlite+aiosqlite:///chat_history.db") #async io for db
 def get_session_history_db(session_id:str):
+    #db에 utf-8 문자를 저장하기 위해 커스텀 클래스 구현
     return SQLChatMessageHistory(
         session_id = session_id,
-        connection = engine
+        connection = engine,
+        custom_message_converter=HistoryMessageConverter("message_store")
     )
 history_mode = "M" # M: memory -> get_session_history, D: database -> get_session_history_db
 

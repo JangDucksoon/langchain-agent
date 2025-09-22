@@ -7,6 +7,7 @@ from langchain.tools import tool
 def execute_python_code(code: str) -> str:
     """
         Execute {code} for only python with external module and Return the output
+        <Critical!!!> Never use this tool unless explicitly instructed to run Python code!!!!
 
         Args:
             code(str) : python code for execution in python file
@@ -45,6 +46,7 @@ def execute_python_code(code: str) -> str:
 def execute_python_docker(code: str, install_script: str | None) -> str:
     """
         Execute {code} for only python with external module in docker container and Return the output
+        <Critical!!!> Never use this tool unless explicitly instructed to run Python code!!!!
 
         Args:
             code(str) : python code for execution in python file
