@@ -125,6 +125,8 @@ async def lifespan(app: FastAPI):
     #mcp server
     mcp_servers = McpManager("mcp_config.json")
 
+    await mcp_servers._McpManager__initialize()
+    tools.extend(mcp_servers.get_tools())
     #agent
     agent = create_tool_calling_agent(llm=llm, tools=tools, prompt=prompt)
     agent_exec = AgentExecutor(agent=agent, tools=tools, callbacks=callbacks, verbose=False)
@@ -136,8 +138,7 @@ async def lifespan(app: FastAPI):
         history_messages_key="chat_history",
     )
 
-    await mcp_servers._McpManager__initialize()
-    tools.extend(mcp_servers.get_tools())
+    app.state.agent_exec_tools = agent_exec.tools
     app.state.agent_with_history = agent_with_history
 
     yield
@@ -166,3 +167,7 @@ async def chat_stream(request: ChatRequest):
                 yield msg
 
     return StreamingResponse(event_generator(), media_type="text/plain")
+
+@app.get("/tools")
+def get_tools():
+    return {"output": f"[ {','.join([tool.name for tool in app.state.agent_exec_tools])} ]"}
