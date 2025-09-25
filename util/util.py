@@ -10,8 +10,8 @@ def pretty_event_print(ev):
             content = "[STEP LOG] " + str(s.action.log) + "\n"
 
             if getattr(s, "observation", None) is not None:
-                print("[OBSERVATION]\n" + str(s.observation))
-                content += "[OBSERVATION]\n" + str(s.observation)
+                print("[OBSERVATION]\n" + str(s.observation) + "\n")
+                content += "[OBSERVATION]\n" + str(s.observation) + "\n"
     elif "actions" in ev:
         for a in ev["actions"]:
             print(f"\n[ACTION] tool={a.tool}\n[ACTION INPUT] {a.tool_input}")
@@ -32,9 +32,9 @@ def pretty_event_print_api(ev):
             content = "[STEP LOG] " + str(s.action.log) + "\n"
 
             if getattr(s, "observation", None) is not None:
-                message = "[OBSERVATION]\n" + str(s.observation)
+                message = "[OBSERVATION]\n" + str(s.observation) + "\n"
                 yield message
-                content += "[OBSERVATION]\n" + str(s.observation)
+                content += "[OBSERVATION]\n" + str(s.observation) + "\n"
     elif "actions" in ev:
         for a in ev["actions"]:
             message = f"\n[ACTION] tool={a.tool}\n[ACTION INPUT] {a.tool_input}"

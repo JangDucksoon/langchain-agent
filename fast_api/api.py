@@ -24,15 +24,16 @@ from command.command import CommandManager
 from checking_ollama import check_ollama_serving
 
 #tool calling prompt
-prompt = ChatPromptTemplate.from_messages([
+PROMPT_TEMPLATE = ChatPromptTemplate.from_messages([
     ("system", """
                 You are a helpful AI assistant that can use tools to answer questions. Answer in {language}.
 
                 Guidelines:
                 1. For simple questions you can answer with your knowledge, respond directly in natural language without using tools.
                 2. If a tool is needed, respond with the correct function call in JSON format as defined by the system (do not mix text and JSON).
-                3. After receiving a tool result, always give the final answer in natural language, not JSON.
-                4. !!!CRITICAL!!!: Before calling any tool, check the "agent_scratchpad" section above.
+                3. You can only use tools that exist on this list -> {tool_list}
+                4. After receiving a tool result, always give the final answer in natural language, not JSON.
+                5. !!!CRITICAL!!!: Before calling any tool, check the "agent_scratchpad" section above.
                     Look for previous "Action:" and "Action Input:" entries.
                     If you see the SAME tool with SAME input already executed, DO NOT call it again.
 
@@ -41,11 +42,11 @@ prompt = ChatPromptTemplate.from_messages([
                         Action Input: {{'timezone': 'Europe/Moscow'}}
                         Observation: 2025-08-26 08:46:36"
                     Then DO NOT call get_current_time_by_country with timezone='Europe/Moscow' again!
-                5. If a user sends a request related to the MCP server, consider using the MCP server tool first rather than the python code execution tool.
+                6. If a user sends a request related to the MCP server, consider using the MCP server tool first rather than the python code execution tool.
                    ***
                     Example: Insert data into Test table, please -> Use Execute DB tools, not execute_python_docker, execute_python_code
                    ***
-                6. Never call any tools more than once with same request (if there are different values of variables, you can call more)
+                7. Never call any tools more than once with same request (if there are different values of variables, you can call more)
                     STEP-BY-STEP CHECK before each tool call:
                     Step 1: Look at your action history above
                     Step 2: Check if you already called this exact tool with these exact parameters
@@ -60,13 +61,12 @@ prompt = ChatPromptTemplate.from_messages([
                     Example of BAD tool usage:
                     Case1) tavily_search(query='Apple') → tavily_search(query='Apple') (exact duplicate)
                     ***
-                7. When using tavily_search or search_web tool:
+                8. When using tavily_search or search_web tool:
                     - FIRST, you must call get_current_time_by_country tool to know today's date
                     - Use this current date information to make your search query more specific and relevant
                     - NEVER use time_range variable when calling tool
                     - You must not call it more than once per question
                     - Always request up to 5 results in a single call and make the answer from those results.
-                8. When user request
     """),
     ("placeholder", "{chat_history}"),
     ("human", "{input}"),
@@ -101,7 +101,7 @@ def get_session_history_db(session_id:str):
         connection = engine,
         custom_message_converter=HistoryMessageConverter("message_store")
     )
-history_mode = "D" # M: memory -> get_session_history, D: database -> get_session_history_db
+history_mode = "M" # M: memory -> get_session_history, D: database -> get_session_history_db
 
 #language
 prompt_language = "Korean"
@@ -127,13 +127,17 @@ async def lifespan(app: FastAPI):
 
     await mcp_servers._McpManager__initialize()
     tools.extend(mcp_servers.get_tools())
+
+    tool_list = ", ".join(t.name for t in tools)
+    prompt = PROMPT_TEMPLATE.partial(tool_list=tool_list)
+
     #agent
     agent = create_tool_calling_agent(llm=llm, tools=tools, prompt=prompt)
     agent_exec = AgentExecutor(agent=agent, tools=tools, callbacks=callbacks, verbose=False)
 
     agent_with_history = RunnableWithMessageHistory(
         runnable=agent_exec,
-        get_session_history=get_session_history_db,
+        get_session_history=get_session_history,
         input_messages_key="input",
         history_messages_key="chat_history",
     )
@@ -155,7 +159,7 @@ async def chat(request: ChatRequest):
         {"input": request.message, "language": prompt_language}, config={"configurable": {"session_id": session_id}}
     )
 
-    return {"output": result["output"]}
+    return result["output"]
 
 @app.post("/chat/stream")
 async def chat_stream(request: ChatRequest):
